@@ -9,13 +9,12 @@ void inicializa_tabela_com_0(unsigned int tab[])
         tab[i] = 0;
 }
 
-void preenche_tab_frequencia(unsigned char texto[], unsigned int tab[])
+void preenche_tab_frequencia(FILE *arquivo, unsigned int tab[])
 {
-    int i = 0;
-    while(texto[i] != '\0')
+    int byte;
+    while((byte = fgetc(arquivo)) != EOF)
     {
-        tab[texto[i]]++;
-        i++;
+        tab[(unsigned char)byte]++;
     }
 }
 
@@ -31,13 +30,25 @@ void imprime_tab_freq(unsigned int tab[])
 
 int main()
 {
-    unsigned char texto[] = "Vamos aprender a programar";
     unsigned int tabela_frequencia[TAM];
+    char nome_arquivo[256];
+
+    printf("Digite o nome do arquivo: ");
+    scanf("%s", nome_arquivo);
+
+    FILE *arquivo = fopen(nome_arquivo, "rb");
+
+        if (arquivo == NULL)
+        {
+            printf("Erro ao abrir o arquivo.\n");
+            return 1;
+        }
+
 
     // tabela de frequencia
 
     inicializa_tabela_com_0(tabela_frequencia);
-    preenche_tab_frequencia(texto, tabela_frequencia);
+    preenche_tab_frequencia(arquivo, tabela_frequencia);
     imprime_tab_freq(tabela_frequencia);
 
 }
