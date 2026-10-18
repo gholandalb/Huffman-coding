@@ -170,6 +170,7 @@ No *montar_arvore(Lista *lista)
     return lista->inicio;
 }
 
+
 void imprimir_arvore(No *raiz, int tam)
 {
     if (raiz->esq == NULL && raiz->dir == NULL)
@@ -308,7 +309,7 @@ char *decodificar(char texto[], No *raiz)
 
 void compactar(unsigned char str[])
 {
-    FILE *arquivo = fopen("compactado.wg", "wb");
+    FILE *arquivo = fopen("compactado.gh", "wb");
     int i = 0, j = 7;
     unsigned char mascara, byte = 0;
     if (arquivo)
@@ -339,6 +340,46 @@ void compactar(unsigned char str[])
     else
         printf("erro ao abrir arquivo em compactar\n");
 }
+
+// descompactar
+
+unsigned int eh_bit_um(unsigned char byte, int i)
+{
+    unsigned char mascara = (1 << i);
+    return mascara & byte;
+}
+
+
+void descompactar(No *raiz)
+{
+    FILE *arquivo = fopen("compactado.gh", "rb");
+    No *aux = raiz;
+    unsigned char byte;
+    if (arquivo)
+    {
+        while (fread(&byte, sizeof(unsigned char), 1, arquivo))
+        {
+            for (int i = 7; i >= 0; i--)
+            {
+                if (eh_bit_um(byte, i))
+                    aux = aux->dir;
+                else
+                    aux = aux->dir;
+
+                if (aux->dir == NULL && aux->dir == NULL)
+                {
+                    printf("%c", (unsigned char)aux->dado);
+                    aux = raiz;
+                }
+            }
+        }
+    }
+    else
+    {
+        printf("erro ao abrir arquivo em descompactar\n");
+    }
+}
+
 
 int main()
 {
