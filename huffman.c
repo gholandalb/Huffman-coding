@@ -304,7 +304,41 @@ char *decodificar(char texto[], No *raiz)
     return decodificado;
 }
 
+//compactar
 
+void compactar(unsigned char str[])
+{
+    FILE *arquivo = fopen("compactado.wg", "wb");
+    int i = 0, j = 7;
+    unsigned char mascara, byte = 0;
+    if (arquivo)
+    {
+        while(str[i] != '\0')
+        {
+            mascara = 1;
+            if (str[i] == '1')
+            {
+                mascara = mascara << j;
+                byte = byte | mascara;
+            }
+            j--;
+            if (j < 0)
+            {
+                fwrite(&byte, sizeof(unsigned char), 1, arquivo);
+                byte = 0;
+                j = 7;
+            }
+            i++;
+        }
+        if (j != 7)
+        {
+            fwrite(&byte, sizeof(unsigned char), 1, arquivo);
+        }
+        fclose(arquivo);
+    }
+    else
+        printf("erro ao abrir arquivo em compactar\n");
+}
 
 int main()
 {
@@ -370,6 +404,10 @@ int main()
     decodificado = decodificar(codificado, arvore);
     printf("\n -------texto decodificado:------\n%s\n", decodificado);
 
-    
+    //compactar
+
+
+
+
     return 0;
 }
