@@ -170,6 +170,13 @@ No *montar_arvore(Lista *lista)
     return lista->inicio;
 }
 
+No *construir_arvore(unsigned int tab[])
+{
+    Lista lista;
+    criar_Lista(&lista);
+    preencher_lista(tab, &lista);
+    return montar_arvore(&lista); // lista vazia -> lista.inicio == NULL -> retorna NULL
+}
 
 void imprimir_arvore(No *raiz, int tam)
 {
@@ -222,7 +229,11 @@ void gerar_dicionario(char **dicionario, No *raiz, char *caminho, int colunas)
     if (raiz->esq == NULL && raiz->dir == NULL)
     {
         unsigned char byte_da_folha = *(unsigned char *)raiz->dado;
-        strcpy(dicionario[byte_da_folha], caminho);
+        
+        if (caminho[0] == '\0')
+            strcpy(dicionario[byte_da_folha], "0");
+        else
+            strcpy(dicionario[byte_da_folha], caminho);
     }
     else
     {
