@@ -5,7 +5,7 @@
 #define TAM 256
 
 typedef struct No{
-    unsigned char byte;
+    void *dado;
     unsigned int frequencia;
     struct No *esq, *dir, *prox;
 }No;
@@ -39,7 +39,7 @@ void imprime_tab_freq(unsigned int tab[])
     for (int i = 0; i < TAM; i++)
     {
         if (tab[i] != 0)
-        printf("Byte: 0x%02X      Frequencia: %u\n", i, tab[i], i);
+        printf("Byte: 0x%02X      Frequencia: %u\n", i, tab[i]);
     }
 
 }
@@ -80,14 +80,17 @@ void inserir_ordenadamente(Lista *lista, No *no)
 void preencher_lista(unsigned int tab[], Lista *lista)
 {
     No *novo;
+    unsigned char *byte_alocado;
     for (int i = 0; i < TAM; i++)
     {
         if (tab[i] > 0)
         {
             novo = malloc(sizeof(No));
-            if (novo)
+            byte_alocado = malloc(sizeof(unsigned char));
+            if (novo && byte_alocado)
             {
-                novo->byte = i;
+                *byte_alocado = i;
+                novo->dado = byte_alocado;
                 novo->frequencia = tab[i];
                 novo->dir = NULL;
                 novo->esq = NULL;
@@ -97,6 +100,8 @@ void preencher_lista(unsigned int tab[], Lista *lista)
             }
             else
             {
+                free(novo);
+                free(byte_alocado);
                 printf("Erro na alocação de memória em preencher_lista!");
                 break;
             }
@@ -110,7 +115,8 @@ void imprimir_lista(Lista *lista)
     printf("------Lista ordenada, tamanho: %d------\n", lista->tam);
     while (aux != NULL)
     {
-        printf("Byte: 0x%02X       Frequencia: %u       char: %c\n", aux->byte, aux->frequencia, aux->byte);
+        unsigned char byte_do_no = *(unsigned char *)aux->dado;
+        printf("Byte: 0x%02X       Frequencia: %u       char: %c\n", byte_do_no, aux->frequencia, byte_do_no);
         aux = aux->prox;
     }
 }
@@ -118,7 +124,7 @@ void imprimir_lista(Lista *lista)
 
 // Montar arvore de huffman
 
-void *remover_no_inicio(Lista *lista)
+No *remover_no_inicio(Lista *lista)
 {
     No *aux = NULL;
     if (lista->inicio != NULL)
@@ -131,18 +137,21 @@ void *remover_no_inicio(Lista *lista)
     return aux;
 }
 
-void *montar_arvore(Lista *lista)
+No *montar_arvore(Lista *lista)
 {
     No *primeiro, *segundo, *novo;
+    unsigned char *byte_no_interno;
     while (lista->tam > 1)
     {
         primeiro = remover_no_inicio(lista);
         segundo = remover_no_inicio(lista);
         novo = malloc(sizeof(No));
+        byte_no_interno = malloc(sizeof(unsigned char));
 
         if (novo)
         {
-            novo->byte = '+';
+            *byte_no_interno = '+';
+            novo->dado = byte_no_interno;
             novo->frequencia = primeiro->frequencia + segundo->frequencia;
             novo->esq = primeiro;
             novo->dir = segundo;
@@ -152,6 +161,8 @@ void *montar_arvore(Lista *lista)
         }
         else
         {
+            free(novo);
+            free(byte_no_interno);
             printf("erro ao alocar memoria em montar_arvore");
             break;
         }
@@ -163,7 +174,8 @@ void imprimir_arvore(No *raiz, int tam)
 {
     if (raiz->esq == NULL && raiz->dir == NULL)
     {
-        printf("Folha: 0x%02X      Altura: %d      char: %c\n", raiz->byte, tam, raiz->byte);
+        unsigned char byte_da_folha = *(unsigned char *)raiz->dado;
+        printf("Folha: 0x%02X      Altura: %d      char: %c\n", byte_da_folha, tam, byte_da_folha);
     }
     else
     {
@@ -208,7 +220,8 @@ void gerar_dicionario(char **dicionario, No *raiz, char *caminho, int colunas)
 
     if (raiz->esq == NULL && raiz->dir == NULL)
     {
-        strcpy(dicionario[raiz->byte], caminho);
+        unsigned char byte_da_folha = *(unsigned char *)raiz->dado;
+        strcpy(dicionario[byte_da_folha], caminho);
     }
     else
     {
@@ -233,6 +246,37 @@ void imprimir_dicionario(char **dicionario)
     }
 }
 
+// codificar 
+
+unsigned long long calcular_tamanho_file(char **dicionario, FILE *arquivo)
+{
+    unsigned long long tam = 0;
+    int byte;
+    while((byte = fgetc(arquivo)) != EOF)
+    {
+        tam += strlen(dicionario[(unsigned char)byte]);
+    }
+    return tam + 1;
+}
+
+
+char* codificar(char **dicionario, FILE *arquivo)
+{
+    rewind(arquivo);  
+    unsigned long long tam = calcular_tamanho_file(dicionario, arquivo);
+    rewind(arquivo);
+
+    char *codigo = calloc(tam, sizeof(char));
+    if (codigo == NULL)
+        return NULL;
+
+    int byte;
+    while((byte = fgetc(arquivo)) != EOF)
+    {
+        strcat(codigo, dicionario[(unsigned char)byte]);
+    }
+    return codigo;
+}
 
 int main()
 {
@@ -243,6 +287,7 @@ int main()
     No *arvore;
     int colunas;
     char **dicionario;
+    char *codificado;
 
     printf("Digite o nome do arquivo que vai ser compactado: ");
     scanf("%s", nome_arquivo);
@@ -280,6 +325,17 @@ int main()
     dicionario = alocar_dicionario(colunas);
     gerar_dicionario(dicionario, arvore, "", colunas);
     imprimir_dicionario(dicionario);
+
+    //codificar
+    arquivo = fopen(nome_arquivo, "rb");
+    if (arquivo == NULL)
+    {
+        printf("Erro ao reabrir o arquivo.\n");
+        return 1;
+    }
+    codificado = codificar(dicionario, arquivo);
+    fclose(arquivo);
+    printf("\n -------texto codificado:------\n%s\n", codificado);
 
     return 0;
 }
