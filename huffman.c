@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define TAM 256
 
@@ -171,6 +172,68 @@ void imprimir_arvore(No *raiz, int tam)
     }
 }
 
+
+//montar dicionario
+
+int altura_arvore(No *raiz)
+{
+    int esq, dir;
+    if (raiz == NULL)
+        return -1;
+    else
+    {
+        esq = altura_arvore(raiz->esq) + 1;
+        dir = altura_arvore(raiz->dir) + 1;
+
+        if (esq > dir)
+            return esq;
+        else
+            return dir;
+    }
+}
+
+char** alocar_dicionario(int colunas)
+{
+    char **dicionario;
+
+    dicionario = malloc(sizeof(char*) * TAM);
+    for (int i = 0; i < TAM; i++)
+        dicionario[i] = calloc(colunas, sizeof(char));
+    return dicionario;
+} 
+
+void gerar_dicionario(char **dicionario, No *raiz, char *caminho, int colunas)
+{
+    char esquerda[colunas], direita[colunas];
+
+    if (raiz->esq == NULL && raiz->dir == NULL)
+    {
+        strcpy(dicionario[raiz->byte], caminho);
+    }
+    else
+    {
+        strcpy(esquerda, caminho);
+        strcpy(direita, caminho);
+
+        strcat(esquerda, "0");
+        strcat(direita, "1");
+
+        gerar_dicionario(dicionario, raiz->esq, esquerda, colunas);
+        gerar_dicionario(dicionario, raiz->dir, direita, colunas);
+    }
+}
+
+void imprimir_dicionario(char **dicionario)
+{
+    printf("------dicionario------\n");
+    for (int i = 0; i < TAM; i++)
+    {
+        if (dicionario[i][0] != '\0')                   
+            printf("0x%02X: %s\n", i, dicionario[i]);
+    }
+}
+
+
 int main()
 {
     unsigned int tabela_frequencia[TAM];
@@ -178,6 +241,8 @@ int main()
 
     Lista lista;
     No *arvore;
+    int colunas;
+    char **dicionario;
 
     printf("Digite o nome do arquivo que vai ser compactado: ");
     scanf("%s", nome_arquivo);
@@ -209,5 +274,12 @@ int main()
     arvore = montar_arvore(&lista);
     printf("------Arvore de huffman:------\n");
     imprimir_arvore(arvore, 0);
+
+    //montar dicionario
+    colunas = altura_arvore(arvore) + 1;
+    dicionario = alocar_dicionario(colunas);
+    gerar_dicionario(dicionario, arvore, "", colunas);
+    imprimir_dicionario(dicionario);
+
     return 0;
 }
