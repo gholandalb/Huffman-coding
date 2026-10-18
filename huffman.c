@@ -148,7 +148,7 @@ No *montar_arvore(Lista *lista)
         novo = malloc(sizeof(No));
         byte_no_interno = malloc(sizeof(unsigned char));
 
-        if (novo)
+        if (novo && byte_no_interno)
         {
             *byte_no_interno = '+';
             novo->dado = byte_no_interno;
@@ -278,6 +278,34 @@ char* codificar(char **dicionario, FILE *arquivo)
     return codigo;
 }
 
+char *decodificar(char texto[], No *raiz)
+{
+    int i = 0;
+    int j = 0; 
+    No *aux = raiz;
+    char *decodificado = calloc(strlen(texto) + 1, sizeof(char));
+    if (decodificado == NULL) 
+        return NULL;
+
+    while (texto[i] != '\0')
+    {
+        if (texto[i] == '0')
+            aux = aux->esq;
+        else
+            aux = aux->dir;
+
+        if (aux->esq == NULL && aux->dir == NULL)
+        {
+            decodificado[j++] = *(unsigned char *)aux->dado;
+            aux = raiz;
+        }
+        i++;
+    }
+    return decodificado;
+}
+
+
+
 int main()
 {
     unsigned int tabela_frequencia[TAM];
@@ -287,7 +315,7 @@ int main()
     No *arvore;
     int colunas;
     char **dicionario;
-    char *codificado;
+    char *codificado, *decodificado;
 
     printf("Digite o nome do arquivo que vai ser compactado: ");
     scanf("%s", nome_arquivo);
@@ -337,5 +365,11 @@ int main()
     fclose(arquivo);
     printf("\n -------texto codificado:------\n%s\n", codificado);
 
+    //decodificar
+
+    decodificado = decodificar(codificado, arvore);
+    printf("\n -------texto decodificado:------\n%s\n", decodificado);
+
+    
     return 0;
 }
