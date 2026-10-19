@@ -543,7 +543,7 @@ int main()
     preenche_tab_frequencia(arquivo, tabela_frequencia);
     fclose(arquivo);
 
-    imprime_tab_freq(tabela_frequencia);
+    //imprime_tab_freq(tabela_frequencia);
 
     //tamanho original do arquivo em bytes
     unsigned long long total_bytes = 0;
