@@ -169,13 +169,13 @@ No *montar_arvore(Lista *lista)
     }
     return lista->inicio;
 }
-
 No *construir_arvore(unsigned int tab[])
 {
     Lista lista;
     criar_Lista(&lista);
     preencher_lista(tab, &lista);
-    return montar_arvore(&lista); // lista vazia -> lista.inicio == NULL -> retorna NULL
+    //imprimir_lista(&lista); 
+    return montar_arvore(&lista);
 }
 
 void imprimir_arvore(No *raiz, int tam)
@@ -596,11 +596,15 @@ int main()
         printf("Arquivo vazio ou erro ao montar a arvore.\n");
         return 1;
     }
+    //imprimir_arvore(arvore, 0);
+
 
     //montar dicionario
     colunas = altura_arvore(arvore) + 1;
     dicionario = alocar_dicionario(colunas);
     gerar_dicionario(dicionario, arvore, "", colunas);
+    //imprimir_dicionario(dicionario);
+
 
     //compactar
     compactar(nome_arquivo, dicionario, tabela_frequencia, arvore, nome_saida);
