@@ -26,10 +26,10 @@ void inicializa_tabela_com_0(unsigned int tab[])
 
 void preenche_tab_frequencia(FILE *arquivo, unsigned int tab[])
 {
-    int byte;
+    int byte; // para caber o EOF (257)
     while((byte = fgetc(arquivo)) != EOF)
     {
-        tab[(unsigned char)byte]++;
+        tab[(unsigned char)byte]++; //devolve para o valor de 0 a 255, funcional para o dicionario
     }
 }
 
