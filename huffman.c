@@ -258,125 +258,101 @@ void imprimir_dicionario(char **dicionario)
     }
 }
 
-// codificar 
-
-unsigned long long calcular_tamanho_file(char **dicionario, FILE *arquivo)
-{
-    unsigned long long tam = 0;
-    int byte;
-    while((byte = fgetc(arquivo)) != EOF)
-    {
-        tam += strlen(dicionario[(unsigned char)byte]);
-    }
-    return tam + 1;
-}
-
-
-char* codificar(char **dicionario, FILE *arquivo)
-{
-    rewind(arquivo);  
-    unsigned long long tam = calcular_tamanho_file(dicionario, arquivo);
-    rewind(arquivo);
-
-    char *codigo = calloc(tam, sizeof(char));
-    if (codigo == NULL)
-        return NULL;
-
-    int byte;
-    while((byte = fgetc(arquivo)) != EOF)
-    {
-        strcat(codigo, dicionario[(unsigned char)byte]);
-    }
-    return codigo;
-}
-//esta funcao (versao em string) NAO eh mais usada no fluxo principal, pois nao
-// funciona para arquivos binarios (bytes 0x00 terminam a string). Mantida so como
-// demonstracao do tutorial, apenas para textos. A descompactacao real eh a funcao
-// descompactar(), mais abaixo.
-
-char *decodificar(char texto[], No *raiz)
-{
-    int i = 0;
-    int j = 0; 
-    No *aux = raiz;
-    char *decodificado = calloc(strlen(texto) + 1, sizeof(char));
-    if (decodificado == NULL) 
-        return NULL;
-
-    while (texto[i] != '\0')
-    {
-        if (texto[i] == '0')
-            aux = aux->esq;
-        else
-            aux = aux->dir;
-
-        if (aux->esq == NULL && aux->dir == NULL)
-        {
-            decodificado[j++] = *(unsigned char *)aux->dado;
-            aux = raiz;
-        }
-        i++;
-    }
-    return decodificado;
-}
 
 //compactar
 
-void compactar(unsigned char str[], unsigned tab[], unsigned long long total_bytes, char nome_saida[])
+//diz se um byte de folha precisa de '\' antes dele no cabecalho.
+// Sao os dois caracteres que teriam significado especial na arvore salva: '*' e '\'.
+int precisa_escape(unsigned char byte)
 {
-    FILE *arquivo = fopen(nome_saida, "wb");
-    int i = 0, j = 7;
-    unsigned char mascara, byte = 0;
-    if (arquivo)
+    return byte == '*' || byte == '\\';
+}
+
+// conta quantos bytes a arvore vai ocupar quando salva em pre-ordem.
+// Folha = 1 byte (2 se precisar de escape). No interno = 1 byte ('*') + filhos.
+// Esse valor vai nos 13 bits do cabecalho, entao precisa ser calculado ANTES de gravar a arvore.
+unsigned short tamanho_arvore(No *raiz)
+{
+    if (raiz->esq == NULL && raiz->dir == NULL)
     {
-        // Cabecalho------------------------
-        //tamanho original do arquivo (para saber quando parar ao descompactar
-        fwrite(&total_bytes, sizeof(unsigned long long), 1, arquivo);
+        if (precisa_escape(*(unsigned char *)raiz->dado))
+            return 2;
+        return 1;
+    }
+    return 1 + tamanho_arvore(raiz->esq) + tamanho_arvore(raiz->dir);
+}
 
-        // quantos bytes distintos existem (de 1 a 256, cabe em unsigned short)
-        unsigned short qtd = 0;
-        for (int k = 0; k < TAM; k++)
-            if (tab[k] > 0)
-                qtd++;
-        fwrite(&qtd, sizeof(unsigned short), 1, arquivo);
 
-        //cada par (byte, frequencia) com isso o descompactador reconstroi a arvore
-        for (int k = 0; k < TAM; k++)
+// grava a arvore em pre-ordem (raiz, esquerda, direita).
+// No interno -> '*'.  Folha -> o proprio byte, com '\' na frente se for '*' ou '\'.
+void escrever_arvore(No *raiz, FILE *arquivo)
+{
+    if (raiz->esq == NULL && raiz->dir == NULL)
+    {
+        unsigned char byte_da_folha = *(unsigned char *)raiz->dado;
+        if (precisa_escape(byte_da_folha))
+            fputc('\\', arquivo);
+        fputc(byte_da_folha, arquivo);
+    }
+    else
+    {
+        fputc('*', arquivo);
+        escrever_arvore(raiz->esq, arquivo);
+        escrever_arvore(raiz->dir, arquivo);
+    }
+}
+
+
+
+// MUDANÇA: a assinatura mudou. Antes recebia (str, tab, total_bytes, nome_saida).
+// Agora recebe a raiz da arvore no lugar da tabela e do total_bytes, pois o cabecalho
+// novo guarda a arvore (e nao mais as frequencias), e o fim dos dados eh dado pelo "lixo".
+void compactar(char nome_entrada[], char **dicionario, unsigned int tab[], No *raiz, char nome_saida[])
+{
+    FILE *entrada = fopen(nome_entrada, "rb");
+    FILE *saida = fopen(nome_saida, "wb");
+    if (entrada == NULL || saida == NULL)
+    {
+        printf("erro ao abrir arquivo em compactar\n");
+        if (entrada) fclose(entrada);
+        if (saida) fclose(saida);
+        return;
+    }
+
+    // total de bits = soma de (frequencia * tamanho do codigo) de cada byte
+    unsigned long long qtd_bits = 0;
+    for (int k = 0; k < TAM; k++)
+        qtd_bits += (unsigned long long)tab[k] * strlen(dicionario[k]);
+
+    unsigned short lixo = (8 - (qtd_bits % 8)) % 8;
+    unsigned short cabecalho = (lixo << 13) | tamanho_arvore(raiz);
+    fputc(cabecalho >> 8, saida);
+    fputc(cabecalho & 0xFF, saida);
+    escrever_arvore(raiz, saida);
+
+    int c, j = 7;
+    unsigned char byte = 0;
+    while ((c = fgetc(entrada)) != EOF)
+    {
+        for (char *p = dicionario[(unsigned char)c]; *p; p++)
         {
-            if (tab[k] > 0)
+            if (*p == '1')
+                byte |= 1 << j;
+            if (--j < 0)
             {
-                unsigned char b = (unsigned char)k;
-                fwrite(&b, sizeof(unsigned char), 1, arquivo);
-                fwrite(&tab[k], sizeof(unsigned int), 1, arquivo);
-            }
-        }
-
-        while(str[i] != '\0')
-        {
-            mascara = 1;
-            if (str[i] == '1')
-            {
-                mascara = mascara << j;
-                byte = byte | mascara;
-            }
-            j--;
-            if (j < 0)
-            {
-                fwrite(&byte, sizeof(unsigned char), 1, arquivo);
+                fputc(byte, saida);
                 byte = 0;
                 j = 7;
             }
-            i++;
         }
-        if (j != 7)
-        {
-            fwrite(&byte, sizeof(unsigned char), 1, arquivo);
-        }
-        fclose(arquivo);
     }
-    else
-        printf("erro ao abrir arquivo em compactar\n");
+    if (j != 7)
+        fputc(byte, saida);
+
+    fclose(entrada);
+    fclose(saida);
 }
+
 
 // descompactar
 
@@ -386,7 +362,60 @@ unsigned int eh_bit_um(unsigned char byte, int i)
     return mascara & byte;
 }
 
-//a funcao faz tudo sozinha: le o cabecalho, reconstroi a arvore e grava o resultado num arquivo. Assim funciona com qualquer .gh, mesmo de outra execucao.
+
+// cria um no com o byte guardado em void *dado (mesmo padrao do resto do codigo)
+No *criar_no(unsigned char byte)
+{
+    No *novo = malloc(sizeof(No));
+    unsigned char *byte_alocado = malloc(sizeof(unsigned char));
+    if (novo == NULL || byte_alocado == NULL)
+    {
+        free(novo);
+        free(byte_alocado);
+        return NULL;
+    }
+    *byte_alocado = byte;
+    novo->dado = byte_alocado;
+    novo->frequencia = 0; // nao eh necessaria na descompactacao
+    novo->esq = novo->dir = novo->prox = NULL;
+    return novo;
+}
+
+
+//  reconstroi a arvore lendo a pre-ordem gravada no arquivo.
+// '*'  -> no interno: le recursivamente o filho esquerdo e depois o direito.
+// '\'  -> escape: o proximo byte eh uma folha, mesmo que seja '*' ou '\'.
+// outro -> folha com aquele byte.
+No *ler_arvore(FILE *entrada)
+{
+    int c = fgetc(entrada);
+    if (c == EOF)
+        return NULL;
+
+    if (c == '*')
+    {
+        No *no = criar_no('+');
+        if (no == NULL)
+            return NULL;
+        no->esq = ler_arvore(entrada);
+        no->dir = ler_arvore(entrada);
+        if (no->esq == NULL || no->dir == NULL)
+            return NULL; // arvore corrompida/incompleta
+        return no;
+    }
+
+    if (c == '\\')
+    {
+        c = fgetc(entrada); // byte escapado
+        if (c == EOF)
+            return NULL;
+    }
+    return criar_no((unsigned char)c);
+}
+
+
+
+//a funcao faz tudo sozinha: le o cabecalho, reconstroi a arvore e grava o resultado num arquivo. Assim funciona com qualquer .huff, mesmo de outra execucao.
 
 void descompactar(char nome_entrada[], char nome_saida[])
 {
@@ -397,42 +426,42 @@ void descompactar(char nome_entrada[], char nome_saida[])
         return;
     }
 
-
-    // le o cabecalho gravado por compactar()
-
-    unsigned long long total_bytes;
-    unsigned short qtd;
-    unsigned int tabela[TAM];
-    inicializa_tabela_com_0(tabela);
-
-    if (fread(&total_bytes, sizeof(unsigned long long), 1, entrada) != 1 || fread(&qtd, sizeof(unsigned short), 1, entrada) != 1 || qtd == 0 || qtd > TAM)
+    // leitura do cabecalho novo (2 bytes). Removidos: total_bytes, qtd, tabela e o loop de leitura dos pares.
+    int b1 = fgetc(entrada);
+    int b2 = fgetc(entrada);
+    if (b1 == EOF || b2 == EOF)
     {
         printf("arquivo compactado invalido (cabecalho corrompido)\n");
         fclose(entrada);
         return;
     }
+    unsigned short cabecalho = (b1 << 8) | b2;
+    unsigned short lixo = cabecalho >> 13;          // 3 bits de cima
+    unsigned short tam_arvore = cabecalho & 0x1FFF; // 13 bits de baixo
 
-    for (int k = 0; k < qtd; k++)
-    {
-        unsigned char byte_lido;
-        unsigned int freq;
-        if (fread(&byte_lido, sizeof(unsigned char), 1, entrada) != 1 || fread(&freq, sizeof(unsigned int), 1, entrada) != 1)
-        {
-            printf("arquivo compactado invalido (tabela incompleta)\n");
-            fclose(entrada);
-            return;
-        }
-        tabela[byte_lido] = freq;
-    }
-
-    // reconstroi a mesma arvore que foi usada na compactacao
-    No *raiz = construir_arvore(tabela);
-    if (raiz == NULL)
+    // a arvore agora eh lida direto do arquivo, nao mais reconstruida a partir de frequencias
+    No *raiz = ler_arvore(entrada);
+    if (raiz == NULL || (unsigned short)(ftell(entrada) - 2) != tam_arvore)
     {
         printf("erro ao reconstruir a arvore\n");
         fclose(entrada);
         return;
     }
+
+    // como nao existe mais total_bytes, descobrimos onde os dados terminam
+    // pelo tamanho do arquivo. Total de bits validos = bytes de dados * 8 - lixo.
+    long inicio_dados = ftell(entrada);
+    fseek(entrada, 0, SEEK_END);
+    long fim_dados = ftell(entrada);
+    fseek(entrada, inicio_dados, SEEK_SET);
+
+    if (fim_dados <= inicio_dados)
+    {
+        printf("arquivo compactado invalido (sem dados)\n");
+        fclose(entrada);
+        return;
+    }
+    unsigned long long total_bits = (unsigned long long)(fim_dados - inicio_dados) * 8 - lixo;
 
     FILE *saida = fopen(nome_saida, "wb");
     if (saida == NULL)
@@ -445,42 +474,44 @@ void descompactar(char nome_entrada[], char nome_saida[])
 
     No *aux = raiz;
     unsigned char byte;
-    unsigned long long escritos = 0;
+    unsigned long long bits_lidos = 0; //antes era "escritos" (contava bytes escritos); agora conta bits lidos
 
     if (raiz->esq == NULL && raiz->dir == NULL)
     {
         //caso especial, arquivo com um unico tipo de byte (arvore = 1 folha).
+        //no compactar esse byte vira o codigo "0" (1 bit), entao ha 1 bit valido por byte original.
 
         unsigned char unico = *(unsigned char *)raiz->dado;
-        while (escritos < total_bytes)
+        while (bits_lidos < total_bits)
         {
             fputc(unico, saida);
-            escritos++;
+            bits_lidos++;
         }
     }
     else
     {
-        // para quando atingir total_bytes (ignora os bits de preenchimento)
-        while (escritos < total_bytes && fread(&byte, sizeof(unsigned char), 1, entrada))
+        // para quando consumir todos os bits validos (ignora os bits de lixo do ultimo byte)
+        while (bits_lidos < total_bits && fread(&byte, sizeof(unsigned char), 1, entrada))
         {
-            for (int i = 7; i >= 0 && escritos < total_bytes; i--)
+            for (int i = 7; i >= 0 && bits_lidos < total_bits; i--)
             {
                 if (eh_bit_um(byte, i))
                     aux = aux->dir;
                 else
-                    aux = aux->esq; // MUDANÇA: era aux->dir (bit 0 tem que ir pra esquerda)
+                    aux = aux->esq;
+
+                bits_lidos++; //conta cada bit processado
 
                 if (aux->esq == NULL && aux->dir == NULL)
                 {
                     fputc(*(unsigned char *)aux->dado, saida);
-                    escritos++;
                     aux = raiz;
                 }
             }
         }
     }
 
-    if (escritos < total_bytes)
+    if (bits_lidos < total_bits)
         printf("aviso: o arquivo compactado terminou antes do esperado (corrompido?)\n");
     else
         printf("Arquivo descompactado com sucesso: %s\n", nome_saida);
@@ -488,7 +519,6 @@ void descompactar(char nome_entrada[], char nome_saida[])
     fclose(entrada);
     fclose(saida);
 }
-
 
 int main()
 {
@@ -503,7 +533,7 @@ int main()
     char **dicionario;
     char *codificado, *decodificado;
 
-    printf("1 - Compactar um arquivo\n2 - Descompactar um arquivo (.gh)\nEscolha: ");
+    printf("1 - Compactar um arquivo\n2 - Descompactar um arquivo (.huff)\nEscolha: ");
     if (scanf("%d", &opcao) != 1)
         return 1;
 
@@ -525,7 +555,8 @@ int main()
 
     printf("Digite o nome do arquivo que vai ser compactado: ");
     scanf("%s", nome_arquivo); 
-    printf("Digite o nome do arquivo compactado (ex: compactado.gh): ");
+    
+    printf("Digite o nome do arquivo compactado (ex: compactado.huff): ");
     scanf("%s", nome_saida);
 
     FILE *arquivo = fopen(nome_arquivo, "rb");
@@ -558,47 +589,22 @@ int main()
     }
 
 
-
     // lista encadeada + arvore de huffman
     arvore = construir_arvore(tabela_frequencia);
     if (arvore == NULL)
     {
-        printf("Erro ao montar a arvore.\n");
+        printf("Arquivo vazio ou erro ao montar a arvore.\n");
         return 1;
     }
-
-    //imprimir_arvore(arvore, 0);
 
     //montar dicionario
     colunas = altura_arvore(arvore) + 1;
     dicionario = alocar_dicionario(colunas);
     gerar_dicionario(dicionario, arvore, "", colunas);
-    //imprimir_dicionario(dicionario);
-
-    //codificar
-    arquivo = fopen(nome_arquivo, "rb");
-    if (arquivo == NULL)
-    {
-        printf("Erro ao reabrir o arquivo.\n");
-        return 1;
-    }
-    codificado = codificar(dicionario, arquivo);
-    fclose(arquivo);
-    //printf("\n -------texto codificado:------\n%s\n", codificado);
-
-    if (codificado == NULL)
-    {
-        printf("Erro ao alocar memoria em codificar.\n");
-        return 1;
-    }
 
     //compactar
-
-    compactar((unsigned char *)codificado, tabela_frequencia, total_bytes, nome_saida);
+    compactar(nome_arquivo, dicionario, tabela_frequencia, arvore, nome_saida);
     printf("Arquivo compactado gerado: %s\n", nome_saida);
-
-    free(codificado);
-
 
     return 0;
 }
